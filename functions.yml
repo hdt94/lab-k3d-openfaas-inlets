@@ -1,0 +1,15 @@
+version: 1.0
+provider:
+  name: openfaas
+functions:
+
+  encode-jwt-hs256:
+    lang: python3
+    handler: ./src/functions/encode-jwt-hs256
+    image: hdt94/function-encode-jwt-hs256:latest
+
+  decode-jwt-hs256:
+    lang: python3
+    handler: ./src/functions/decode-jwt-hs256
+    image: hdt94/function-decode-jwt-hs256:latest
+

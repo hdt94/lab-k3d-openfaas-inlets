@@ -1,15 +1,17 @@
 # Lab k3d + OpenFaaS + Inlets
 
-Setup of an OpenFaaS single node running on a k3s cluster managed with k3d and tunneled to a Digital Ocean droplet using Inlets to deploy two functions at following HTTP endpoints:
+Setup OpenFaaS in a single node running on a k3s cluster managed with k3d and tunneled to a Digital Ocean droplet using Inlets to deploy two functions for encoding-decoding JSON Web Tokens JWTs at following HTTP endpoints:
 ```
 /function/encode-jwt-hs256
 /function/decode-jwt-hs256
 ```
-**Warning: No SSL/TLS is being used**
+Both computing environment to run OpenFaaS and development environment to deploy functions are installed directly in local machine.
 
-This lab has been correctly tested on Ubuntu 18 Bionic. Installers of tools are intended to be cross-platform so no major issue should appear with macOS. Windows users may find troubles but Git Bash is encouraged.
+**Warning: No SSL/TLS is used**
 
-`inlets-operator` is not used because of problems at running default tunneling on k3s.
+This lab has been correctly tested on Ubuntu 18 Bionic. Installers of tools are intended to be cross-platform so no major issue should appear with macOS. Windows users may find troubles but using Git Bash is encouraged.
+
+`inlets-operator` is not used because of problems at running default tunneling of services on k3s.
 
 ## Prerequisites
 
@@ -29,15 +31,15 @@ This lab has been correctly tested on Ubuntu 18 Bionic. Installers of tools are 
 
 	```bash
 	$ export $TOKEN= # Paste your token
-	$ export CLOUD_TOKEN_FILE=~/token_do
-	$ echo -n $TOKEN > $CLOUD_TOKEN_FILE
+	$ touch ~/token_do
+	$ echo $TOKEN > ~/token_do
 	```
 
 ## Up and running
 
-Note: asciinema with watching steps at [https://asciinema.org/](https://asciinema.org/)
+Note: some configurations and pods may take a while before ready so be sure to watch asciinema with `watch` commands at [https://asciinema.org/a/341395](https://asciinema.org/a/341395)
 
-### Computing environment
+### Computing environment setup
 
 Note: you must `export KUBECONFIG` in every session; optionally can append to ~/.bash_profile
 
@@ -46,15 +48,17 @@ Setup OpenFaaS in a k3s cluster with k3d:
 $ k3d create
 $ export KUBECONFIG="$(k3d get-kubeconfig --name='k3s-default')"
 $ arkade install openfaas --load-balancer
+$ echo "PASSWORD=$(kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode)"
 ```
 
 Create and provision droplet:
 ```bash
 $ inletsctl create --provider digitalocean \
 	--region nyc1 \
-	--access-token-file $CLOUD_TOKEN_FILE
-$ export CLOUD_URL= # Copy remote IP
+	--access-token-file ~/token_do
 ```
+
+Copy `inlets client --remote VALUE --token VALUE --upstream $UPSTREAM` command from previous step.
 
 Connect OpenFaaS with droplet:
 ```bash
@@ -65,18 +69,14 @@ $ inlets client --remote "ws://161.35.50.52:8080" \
 	--upstream $UPSTREAM
 ```
 
-### Development environment
-
-Notes:
-- `$UPSTREAM` is defined in computing environment setup.
-- `$OPENFAAS_PASSWORD` is defined with command substitution considering cluster is running at same development machine. Otherwise, it will need to be copied from computing environment setup.
+### Development environment setup
 
 Login and deploy functions:
 ```bash
-$ export KUBECONFIG="$(k3d get-kubeconfig --name='k3s-default')"
-$ export OPENFAAS_PASSWORD=$(kubectl get secret -n openfaas basic-auth -o jsonpath="{.data.basic-auth-password}" | base64 --decode)
-$ export OPENFAAS_URL= # Copy value of $UPSTREAM
+$ export OPENFAAS_PASSWORD= # Copy value of $PASSWORD in computing environment setup
+$ export OPENFAAS_URL= # Copy value of $UPSTREAM in computing environment setup
 $ faas-cli login --username admin --password $OPENFAAS_PASSWORD
+$ faas-cli template pull
 $ faas-cli deploy -f functions.yml
 $ faas-cli ls
 ```
@@ -87,14 +87,15 @@ Notes: `$CLOUD_URL` is copied from computing environment setup.
 
 Define a secret to sign JWT:
 ```bash
+$ export CLOUD_URL= # Copy public IP of droplet in computing environment setup
+$ export PAYLOAD="{ \"name\": \"hdt\", \"iat\": 50 }"
 $ export SECRET=$(< /dev/urandom tr -dc _A-Z-a-z-0-9 | head -c${1:-32})
 ```
 
 Encode a payload into a JWT:
 ```bash
-$ export PAYLOAD="{ \"name\": \"hdt\", \"iat\": 50 }"
 $ export JWT=$(curl -s "$CLOUD_URL/function/encode-jwt-hs256" -d "{ \"payload\": ${PAYLOAD}, \"secret\": \"$SECRET\" }")
-$ echo $JWT
+$ echo "JWT=$JWT"
 ```
 
 Decode data from a JWT:
